@@ -4,6 +4,10 @@ from btchip.btchipUtils import *
 from bitcoin.rpc import Proxy
 import sys
 
+# This script will create a dummy transaction and sign
+
+# https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html most up to date spec
+
 try:
     bitcoin = Proxy()
 except:
