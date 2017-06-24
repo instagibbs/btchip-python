@@ -133,7 +133,8 @@ print("*** Presigned transaction ***")
 print(fundTxn["hex"])
 print("*** Finalized transaction ***")
 print(transaction)
-
+print("*** Feerate ***")
+print(str(fundTxn["fee"]*100000000/(len(transaction)/2)).split(".")[0] + " satoshis/byte")
 response = raw_input("Send transaction? Y/n\n")
 if response == "Y":
     print(bitcoin.call("sendrawtransaction", transaction))
