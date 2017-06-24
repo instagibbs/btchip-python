@@ -6,20 +6,42 @@ import bitcoin
 import sys
 
 # This script will create a funded transaction from the wallet and sign
+# This script requires you be running hdwatchonly(https://github.com/bitcoin/bitcoin/pull/9728)
+# and set the "donglePath" variable below to whichever account xpubkey you
+# imported into your Core wallet.
+#
+# Also make sure that any funds in your wallet are p2pkh;
+# This means that any regtest `generate` should be replaced
+# by `generatetoaddress` to avoid funding the txn with p2pk outputs.
+#
+# Other dependencies:
+# python-bitcoinlib
+# btchip-python
+# and of course a connected Ledger Nano S
+# running the bitcoin app
 
+# Resources:
 # https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html most up to date spec
 
-network = 'mainnet'
 if len(sys.argv) < 3:
     print("Please enter an address and amount to send")
     sys.exit(-1)
 
+network = 'testnet'
 if len(sys.argv) > 3:
     # arg can be "testnet", "mainnet", or "regtest"
     network = sys.argv[3]
 
-# Assume standard BIP44 structure
-donglePath = "44'/0'/0'"
+# Assume standard BIP44 structure to xpub in Core
+# if this is wrong signing will fail.
+donglePath = "m/44'/0'/0'"[2:]
+if len(sys.argv) > 4:
+    donglePath = sys.argv[4][2:]
+
+# Default wait of 6 blocks
+block_target = 6
+if len(sys.argv) > 5:
+    block_target = int(sys.argv[5])
 
 destAddr = sys.argv[1]
 amount = sys.argv[2]
@@ -31,6 +53,8 @@ except:
     print("Make sure bitcoind is running.")
     sys.exit(-1)
 
+smartfee = bitcoin.call("estimatesmartfee", block_target, False)["feerate"]
+
 # Setup dongle
 dongle = getDongle(True)
 app = btchip(dongle)
@@ -40,7 +64,11 @@ rawTxn = bitcoin.call("createrawtransaction", [], {destAddr:amount})
 
 # Fund the transaction
 # Inputs in this setup must be p2pkh and not coinbase transactions
-fundTxn = bitcoin.call("fundrawtransaction", rawTxn, {"includeWatching":True})
+fundoptions = {"includeWatching":True}
+if smartfee > -1:
+    fundoptions["feeRate"] = smartfee
+
+fundTxn = bitcoin.call("fundrawtransaction", rawTxn, fundoptions)
 # Grab input transactions
 decodedTxn = bitcoin.call("decoderawtransaction", fundTxn["hex"])
 
@@ -106,3 +134,8 @@ print(fundTxn["hex"])
 print("*** Finalized transaction ***")
 print(transaction)
 
+response = raw_input("Send transaction? Y/n\n")
+if response == "Y":
+    print(bitcoin.call("sendrawtransaction", transaction))
+else:
+    print("Transaction not sent.")
