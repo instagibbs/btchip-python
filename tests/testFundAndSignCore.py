@@ -88,6 +88,7 @@ inputVouts = []
 inputAddrs = []
 inputPaths = []
 inputPubKey = []
+inputSeq = []
 for input in decodedTxn["vin"]:
     walletInput = bitcoin.call("gettransaction", input["txid"])
     decodedInput = bitcoin.call("decoderawtransaction", walletInput["hex"])
@@ -98,6 +99,7 @@ for input in decodedTxn["vin"]:
     validata = bitcoin.validateaddress(inputAddrs[-1])
     inputPaths.append(validata["hdkeypath"][1:])
     inputPubKey.append(validata["pubkey"])
+    inputSeq.append(hex(input["sequence"])[2:])
 
 spendTxn = bytearray(fundTxn["hex"].decode('hex'))
 
@@ -109,14 +111,16 @@ signatures = []
 for i in range(len(inputTxids)):
     inputTransaction = bitcoinTransaction(bytearray(rawInputs[i].decode('hex')))
     trustedInputs.append(app.getTrustedInput(inputTransaction, inputVouts[i]))
+    trustedInputs[-1]["sequence"] = inputSeq[i]
     prevoutScriptPubkey.append(inputTransaction.outputs[inputVouts[i]].script)
 
 # Now we sign the transaction, input by input
 for i in range(len(inputTxids)):
+    # this call assumes transaction version 1
     app.startUntrustedTransaction(i == 0, i, trustedInputs, prevoutScriptPubkey[i])
     outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Provide the key that is signing the input
-    signatures.append(app.untrustedHashSign(donglePath+inputPaths[i], "", 0, 0x01))
+    signatures.append(app.untrustedHashSign(donglePath+inputPaths[i], "", decodedTxn["locktime"], 0x01))
 
 inputScripts = []
 for i in range(len(signatures)):
@@ -126,8 +130,13 @@ trustedInputsAndInputScripts = []
 for trustedInput, inputScript in zip(trustedInputs, inputScripts):
     trustedInputsAndInputScripts.append([trustedInput['value'], inputScript])
 
-transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts)
-transaction = str(transaction).encode('hex')
+# Setting version to 1 and locktime correctly
+transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts, 0x01, decodedTxn["locktime"])
+transaction = bitcoinTransaction(transaction)
+for i in range(len(inputSeq)):
+    transaction.inputs[i].sequence = bytearray(inputSeq[i].decode('hex'))
+transaction = transaction.serialize()
+transaction = ''.join('{:02x}'.format(x) for x in transaction)
 
 print("*** Presigned transaction ***")
 print(fundTxn["hex"])
