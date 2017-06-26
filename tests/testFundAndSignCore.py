@@ -99,7 +99,21 @@ for input in decodedTxn["vin"]:
     inputAddrs.append(decodedInput["vout"][input["vout"]]["scriptPubKey"]["addresses"][0])
     inputType.append(decodedInput["vout"][input["vout"]]["scriptPubKey"]["type"])
     validata = bitcoin.validateaddress(inputAddrs[-1])
-    inputPaths.append(validata["hdkeypath"][1:])
+    if validata["isscript"] == True:
+        if validata["script"] != "multisig":
+            raise Exception("Only multisig p2sh are currently supported")
+        subpaths = []
+        if "addresses" in validata:
+            for address in validata["addresses"]:
+                subvalid = bitcoin.validateaddress(address)
+                if subvalid["ismine"]:
+                    subpaths.append(subvalid["hdkeypath"][1:])
+        inputPaths.append(subpaths)
+
+    elif "hdkeypath" not in validata:
+        raise Exception("Can not find keypath from address. Not ours?")
+    else:
+        inputPaths.append([validata["hdkeypath"][1:]])
     inputPubKey.append(validata["pubkey"])
     seq = format(input["sequence"], 'x')
     seq = seq.zfill(len(seq)+len(seq)%2)
@@ -124,6 +138,7 @@ for i in range(len(inputTxids)):
     app.startUntrustedTransaction(i == 0, i, trustedInputs, prevoutScriptPubkey[i], decodedTxn["version"])
     outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Provide the key that is signing the input
+    # TODO sign appropriate number of times depending on ability, return all signatures
     signatures.append(app.untrustedHashSign(donglePath+inputPaths[i], "", decodedTxn["locktime"], 0x01))
 
 inputScripts = []
@@ -132,6 +147,8 @@ for i in range(len(signatures)):
         inputScripts.append(get_p2pk_input_script(signatures[i]))
     elif inputType[i] == "pubkeyhash":
         inputScripts.append(get_regular_input_script(signatures[i], inputPubKey[i]))
+    elif inputType[i] == "scripthash":
+        inputScripts.append(get_p2sh_input_script(raw_input("Please enter redeemscript for input " + str(i)), [signatures[i]]))
     else:
         raise Exception("only p2pkh and p2pk currently supported")
 
