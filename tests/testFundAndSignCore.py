@@ -117,7 +117,7 @@ for i in range(len(inputTxids)):
 # Now we sign the transaction, input by input
 for i in range(len(inputTxids)):
     # this call assumes transaction version 1
-    app.startUntrustedTransaction(i == 0, i, trustedInputs, prevoutScriptPubkey[i])
+    app.startUntrustedTransaction(i == 0, i, trustedInputs, prevoutScriptPubkey[i], decodedTxn["version"])
     outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Provide the key that is signing the input
     signatures.append(app.untrustedHashSign(donglePath+inputPaths[i], "", decodedTxn["locktime"], 0x01))
@@ -130,8 +130,7 @@ trustedInputsAndInputScripts = []
 for trustedInput, inputScript in zip(trustedInputs, inputScripts):
     trustedInputsAndInputScripts.append([trustedInput['value'], inputScript])
 
-# Setting version to 1 and locktime correctly
-transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts, 0x01, decodedTxn["locktime"])
+transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts, decodedTxn["version"], decodedTxn["locktime"])
 transaction = bitcoinTransaction(transaction)
 for i in range(len(inputSeq)):
     transaction.inputs[i].sequence = bytearray(inputSeq[i].decode('hex'))
