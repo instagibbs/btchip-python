@@ -89,6 +89,7 @@ inputAddrs = []
 inputPaths = []
 inputPubKey = []
 inputSeq = []
+inputType = []
 for input in decodedTxn["vin"]:
     walletInput = bitcoin.call("gettransaction", input["txid"])
     decodedInput = bitcoin.call("decoderawtransaction", walletInput["hex"])
@@ -96,6 +97,7 @@ for input in decodedTxn["vin"]:
     inputTxids.append(input["txid"])
     inputVouts.append(input["vout"])
     inputAddrs.append(decodedInput["vout"][input["vout"]]["scriptPubKey"]["addresses"][0])
+    inputType.append(decodedInput["vout"][input["vout"]]["scriptPubKey"]["type"])
     validata = bitcoin.validateaddress(inputAddrs[-1])
     inputPaths.append(validata["hdkeypath"][1:])
     inputPubKey.append(validata["pubkey"])
@@ -126,7 +128,12 @@ for i in range(len(inputTxids)):
 
 inputScripts = []
 for i in range(len(signatures)):
-    inputScripts.append(get_regular_input_script(signatures[i], inputPubKey[i]))
+    if inputType[i] == "pubkey":
+        inputScripts.append(get_p2pk_input_script(signatures[i]))
+    elif inputType[i] == "pubkeyhash":
+        inputScripts.append(get_regular_input_script(signatures[i], inputPubKey[i]))
+    else:
+        raise Exception("only p2pkh and p2pk currently supported")
 
 trustedInputsAndInputScripts = []
 for trustedInput, inputScript in zip(trustedInputs, inputScripts):

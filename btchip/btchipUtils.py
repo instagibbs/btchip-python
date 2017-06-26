@@ -64,6 +64,13 @@ def get_regular_input_script(sigHashtype, publicKey):
 	result.extend(publicKey)
 	return bytearray(result)
 
+def get_p2pk_input_script(sigHashtype):
+	if len(sigHashtype) >= 0x4c:
+		raise BTChipException("Invalid sigHashtype")
+	result = [ len(sigHashtype) ]
+	result.extend(sigHashtype)
+	return bytearray(result)
+
 def write_pushed_data_size(data, buffer):
 	if (len(data) > 0xffff):
 		raise BTChipException("unsupported encoding")
