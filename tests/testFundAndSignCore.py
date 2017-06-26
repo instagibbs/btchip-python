@@ -99,7 +99,9 @@ for input in decodedTxn["vin"]:
     validata = bitcoin.validateaddress(inputAddrs[-1])
     inputPaths.append(validata["hdkeypath"][1:])
     inputPubKey.append(validata["pubkey"])
-    inputSeq.append(hex(input["sequence"])[2:])
+    seq = format(input["sequence"], 'x')
+    seq = seq.zfill(len(seq)+len(seq)%2)
+    inputSeq.append(seq)
 
 spendTxn = bytearray(fundTxn["hex"].decode('hex'))
 
