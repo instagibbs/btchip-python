@@ -128,13 +128,9 @@ for i in range(len(signatures)):
 
 trustedInputsAndInputScripts = []
 for trustedInput, inputScript in zip(trustedInputs, inputScripts):
-    trustedInputsAndInputScripts.append([trustedInput['value'], inputScript])
+    trustedInputsAndInputScripts.append([trustedInput['value'], inputScript, inputSeq[i]])
 
 transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts, decodedTxn["version"], decodedTxn["locktime"])
-transaction = bitcoinTransaction(transaction)
-for i in range(len(inputSeq)):
-    transaction.inputs[i].sequence = bytearray(inputSeq[i].decode('hex'))
-transaction = transaction.serialize()
 transaction = ''.join('{:02x}'.format(x) for x in transaction)
 
 print("*** Presigned transaction ***")
