@@ -4,7 +4,7 @@ from btchip.btchipUtils import *
 from bitcoin.rpc import Proxy
 import bitcoin
 import sys
-from pdb import set_trace
+
 # This script will create a funded transaction from the wallet and sign
 # This script requires you be running hdwatchonly(https://github.com/bitcoin/bitcoin/pull/9728)
 # and set the "donglePath" variable below to whichever account xpubkey you
@@ -118,6 +118,7 @@ for input in decodedTxn["vin"]:
     else:
         inputPaths.append([validata["hdkeypath"][1:]])
         inputPubKey.append(validata["pubkey"])
+        redeemScripts.append("")
 
     seq = format(input["sequence"], 'x')
     seq = seq.zfill(len(seq)+len(seq)%2)
@@ -139,7 +140,8 @@ for i in range(len(inputTxids)):
 # Now we sign the transaction, input by input
 for i in range(len(inputTxids)):
     # this call assumes transaction version 1
-    app.startUntrustedTransaction(i == 0, i, trustedInputs, prevoutScriptPubkey[i], decodedTxn["version"])
+    prevoutscript = bytearray(redeemScripts[i].decode('hex')) if inputType[i] == "scripthash" else prevoutScriptPubkey[i]
+    app.startUntrustedTransaction(i == 0, i, trustedInputs, prevoutscript, decodedTxn["version"])
     outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Provide the key that is signing the input
     signature = []
@@ -156,7 +158,7 @@ for i in range(len(signatures)):
     elif inputType[i] == "scripthash":
         inputScripts.append(get_p2sh_input_script(bytearray(redeemScripts[i].decode('hex')), signatures[i]))
     else:
-        raise Exception("only p2pkh and p2pk currently supported")
+        raise Exception("only p2pkh, non-segwit p2sh and p2pk currently supported")
 
 trustedInputsAndInputScripts = []
 for trustedInput, inputScript in zip(trustedInputs, inputScripts):
