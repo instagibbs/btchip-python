@@ -4,7 +4,7 @@ from btchip.btchipUtils import *
 from bitcoin.rpc import Proxy
 import bitcoin
 import sys
-
+from pdb import set_trace
 # This script will create a funded transaction from the wallet and sign
 # This script requires you be running hdwatchonly(https://github.com/bitcoin/bitcoin/pull/9728)
 # and set the "donglePath" variable below to whichever account xpubkey you
@@ -90,6 +90,7 @@ inputPaths = []
 inputPubKey = []
 inputSeq = []
 inputType = []
+redeemScripts = []
 for input in decodedTxn["vin"]:
     walletInput = bitcoin.call("gettransaction", input["txid"])
     decodedInput = bitcoin.call("decoderawtransaction", walletInput["hex"])
@@ -106,15 +107,18 @@ for input in decodedTxn["vin"]:
         if "addresses" in validata:
             for address in validata["addresses"]:
                 subvalid = bitcoin.validateaddress(address)
-                if subvalid["ismine"]:
+                if "hdkeypath" in subvalid:
                     subpaths.append(subvalid["hdkeypath"][1:])
         inputPaths.append(subpaths)
+        inputPubKey.append("")
+        redeemScripts.append(validata["hex"])
 
     elif "hdkeypath" not in validata:
         raise Exception("Can not find keypath from address. Not ours?")
     else:
         inputPaths.append([validata["hdkeypath"][1:]])
-    inputPubKey.append(validata["pubkey"])
+        inputPubKey.append(validata["pubkey"])
+
     seq = format(input["sequence"], 'x')
     seq = seq.zfill(len(seq)+len(seq)%2)
     inputSeq.append(seq)
@@ -138,17 +142,19 @@ for i in range(len(inputTxids)):
     app.startUntrustedTransaction(i == 0, i, trustedInputs, prevoutScriptPubkey[i], decodedTxn["version"])
     outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Provide the key that is signing the input
-    # TODO sign appropriate number of times depending on ability, return all signatures
-    signatures.append(app.untrustedHashSign(donglePath+inputPaths[i], "", decodedTxn["locktime"], 0x01))
+    signature = []
+    for inputPath in inputPaths[i]:
+        signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
+    signatures.append(signature)
 
 inputScripts = []
 for i in range(len(signatures)):
     if inputType[i] == "pubkey":
-        inputScripts.append(get_p2pk_input_script(signatures[i]))
+        inputScripts.append(get_p2pk_input_script(signatures[i][0]))
     elif inputType[i] == "pubkeyhash":
-        inputScripts.append(get_regular_input_script(signatures[i], inputPubKey[i]))
+        inputScripts.append(get_regular_input_script(signatures[i][0], inputPubKey[i]))
     elif inputType[i] == "scripthash":
-        inputScripts.append(get_p2sh_input_script(raw_input("Please enter redeemscript for input " + str(i)), [signatures[i]]))
+        inputScripts.append(get_p2sh_input_script(bytearray(redeemScripts[i].decode('hex')), signatures[i]))
     else:
         raise Exception("only p2pkh and p2pk currently supported")
 
