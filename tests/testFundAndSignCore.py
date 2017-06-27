@@ -137,15 +137,17 @@ for i in range(len(inputTxids)):
     trustedInputs[-1]["sequence"] = inputSeq[i]
     prevoutScriptPubkey.append(inputTransaction.outputs[inputVouts[i]].script)
 
+newTx = True
 # Now we sign the transaction, input by input
 for i in range(len(inputTxids)):
-    # this call assumes transaction version 1
-    prevoutscript = bytearray(redeemScripts[i].decode('hex')) if inputType[i] == "scripthash" else prevoutScriptPubkey[i]
-    app.startUntrustedTransaction(i == 0, i, trustedInputs, prevoutscript, decodedTxn["version"])
-    outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
-    # Provide the key that is signing the input
     signature = []
     for inputPath in inputPaths[i]:
+        # this call assumes transaction version 1
+        prevoutscript = bytearray(redeemScripts[i].decode('hex')) if inputType[i] == "scripthash" else prevoutScriptPubkey[i]
+        app.startUntrustedTransaction(newTx, i, trustedInputs, prevoutscript, decodedTxn["version"])
+        newTx = False
+        outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
+        # Provide the key that is signing the input
         signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
     signatures.append(signature)
 
