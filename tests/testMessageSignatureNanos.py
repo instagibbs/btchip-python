@@ -30,7 +30,7 @@ dongle = getDongle(True)
 app = btchip(dongle)
 
 # Start signing
-print(app.getWalletPublicKey(keyPath))
+print(app.getWalletPublicKey(keyPath, True))
 app.signMessagePrepare(keyPath, MESSAGE)
 # Compute the signature
 signature = app.signMessageSign()
