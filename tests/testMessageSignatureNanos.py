@@ -25,13 +25,6 @@ MESSAGE = raw_input("Message to sign:\n")
 
 keyPath = raw_input("Key path to use:\n")[2:]
 
-def parityOf(byte):
-    parity = 0
-    while (byte):
-        parity = ~parity
-        byte = byte & (byte - 1)
-    return parity
-
 # Optional setup
 dongle = getDongle(True)
 app = btchip(dongle)
