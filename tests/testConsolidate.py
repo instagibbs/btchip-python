@@ -3,17 +3,18 @@ from btchip.btchip import *
 from btchip.btchipUtils import *
 from bitcoin.rpc import Proxy
 import bitcoin
-from pdb import set_trace
+from decimal import *
 
-if len(sys.argv) < 6:
-    print("Please give: address network derivation_path conf_target consolidation_amount")
+if len(sys.argv) < 7:
+    print("Please give: address network derivation_path conf_target consolidation_min consolidation_max")
     sys.exit(-1)
 
 address = sys.argv[1]
 network = sys.argv[2]
 donglePath = sys.argv[3][2:]
 block_target = int(sys.argv[4])
-consolidateLevel = float(sys.argv[5])
+consolidateMin = Decimal(sys.argv[5])
+consolidateMax = Decimal(sys.argv[6])
     
 bitcoin.SelectParams(network)
 
@@ -29,12 +30,14 @@ smartfee = bitcoin.call("estimatesmartfee", block_target, False)["feerate"]
 dongle = getDongle(True)
 app = btchip(dongle)
 
+bitcoin.call("lockunspent", True)
+
 # Get change address, amount you're sending
 lockedFunds = []
 destAmount = 0
 unspent = bitcoin.call("listunspent", 0)
 for utxo in unspent:
-    if utxo["amount"] > consolidateLevel:
+    if utxo["amount"] > consolidateMax or utxo["amount"] < consolidateMin:
         lockedFunds.append({"txid":utxo["txid"], "vout":utxo["vout"]})
     else:
         destAmount += utxo["amount"] 
