@@ -30,6 +30,13 @@ smartfee = bitcoin.call("estimatesmartfee", block_target, False)["feerate"]
 dongle = getDongle(True)
 app = btchip(dongle)
 
+keydata = bitcoin.call("validateaddress", address)
+if "hdkeypath" in keydata:
+    app.getWalletPublicKey(donglePath+keydata["hdkeypath"][1:], True)
+else:
+    print("Wallet doesn't own destination address, exiting.")
+    sys.exit(-1)
+
 bitcoin.call("lockunspent", True)
 
 # Get change address, amount you're sending
@@ -52,7 +59,7 @@ rawTxn = bitcoin.call("createrawtransaction", [], {address:str(destAmount)})
 # Fund the transaction
 fundoptions = {"includeWatching":True, "optIntoRbf":True, "subtractFeeFromOutputs":[0]}
 if smartfee > -1:
-    fundoptions["feeRate"] = smartfee
+    fundoptions["feeRate"] = str(smartfee)
 
 fundTxn = bitcoin.call("fundrawtransaction", rawTxn, fundoptions)
 # Grab input transactions

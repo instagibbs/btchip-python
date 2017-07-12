@@ -64,9 +64,9 @@ rawTxn = bitcoin.call("createrawtransaction", [], {destAddr:amount})
 
 # Fund the transaction
 # Inputs in this setup must be p2pkh and not coinbase transactions
-fundoptions = {"includeWatching":True}
+fundoptions = {"includeWatching":True, "optIntoRbf":True}
 if smartfee > -1:
-    fundoptions["feeRate"] = smartfee
+    fundoptions["feeRate"] = str(smartfee)
 
 fundTxn = bitcoin.call("fundrawtransaction", rawTxn, fundoptions)
 # Grab input transactions
