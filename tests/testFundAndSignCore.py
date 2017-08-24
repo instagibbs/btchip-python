@@ -53,7 +53,7 @@ except:
     print("Make sure bitcoind is running.")
     sys.exit(-1)
 
-smartfee = bitcoin.call("estimatesmartfee", block_target, False)["feerate"]
+smartfee = bitcoin.call("estimatesmartfee", block_target, "ECONOMICAL")
 
 # Setup dongle
 dongle = getDongle(True)
@@ -64,8 +64,8 @@ rawTxn = bitcoin.call("createrawtransaction", [], {destAddr:amount})
 
 # Fund the transaction
 # Inputs in this setup must be p2pkh and not coinbase transactions
-fundoptions = {"includeWatching":True, "optIntoRbf":True}
-if smartfee > -1:
+fundoptions = {"includeWatching":True, "replaceable":True}
+if "feerate" in smartfee:
     fundoptions["feeRate"] = str(smartfee)
 
 fundTxn = bitcoin.call("fundrawtransaction", rawTxn, fundoptions)
