@@ -193,9 +193,11 @@ if has_segwit:
             newTx = False
             outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
             signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
+        # put in place
+        signatures[i] = signature
 
 
-
+witnessesToInsert = [0x00]*len(signatures)
 inputScripts = []
 for i in range(len(signatures)):
     if inputType[i] == "pubkey":
@@ -203,17 +205,31 @@ for i in range(len(signatures)):
     elif inputType[i] == "pubkeyhash":
         inputScripts.append(get_regular_input_script(signatures[i][0], inputPubKey[i]))
     elif inputType[i] == "p2sh-multisig":
-        inputScripts.append(get_p2sh_input_script(bytearray(redeemScripts[i].decode('hex')), signatures[i]))
+        inputScripts.append(get_p2sh_multisig_input_script(bytearray(redeemScripts[i].decode('hex')), signatures[i]))
     elif inputType[i] == "p2sh-witness_v0_keyhash":
-        raise Exception("need to implement p2sh-witness_v0_keyhash")
+        # Just the redeemscript, we need to insert the signature to witness
+        inputScripts.append(bytearray(redeemScripts[i].decode('hex')))
+        witnessesToInsert[i] = get_witness_keyhash_witness(signatures[i][0], inputPubKey[i])
     else:
-        raise Exception("only p2pkh, p2sh and p2pk currently supported")
+        raise Exception("only p2pkh, p2sh(multisig and p2wpkh) and p2pk currently supported")
+
+witness = ""
+for i in len(witnessesToInsert):
+    writeVarint(len(witnessesToInsert[i]), witness)
+    if len(witnessesToInsert[i] != 0:
+        witness.extend(witnessToInsert[i])
+
+processed_inputs = segwitInputs if has_segwit else trustedInputs
+process_trusted = not has_segwit
+    
 
 trustedInputsAndInputScripts = []
-for trustedInput, inputScript in zip(trustedInputs, inputScripts):
-    trustedInputsAndInputScripts.append([trustedInput['value'], inputScript, inputSeq[i]])
+for trustedInput, inputScript in zip(processed_inputs, inputScripts):
+    trustedInputsAndInputScripts.append([processed_inputs['value'], inputScript, inputSeq[i]])
 
-transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts, decodedTxn["version"], decodedTxn["locktime"])
+transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts, decodedTxn["version"], decodedTxn["locktime"], process_trusted)
+# Next, insert witness data TODO support in library
+transaction.witnessScript = witness
 transaction = ''.join('{:02x}'.format(x) for x in transaction)
 
 print("*** Presigned transaction ***")

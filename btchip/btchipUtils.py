@@ -35,13 +35,13 @@ def compress_public_key(publicKey):
 	else:
 		raise BTChipException("Invalid public key format")
 
-def format_transaction(dongleOutputData, trustedInputsAndInputScripts, version=0x01, lockTime=0):
+def format_transaction(dongleOutputData, trustedInputsAndInputScripts, version=0x01, lockTime=0, trusted=True):
 	transaction = bitcoinTransaction()
 	transaction.version = []
 	writeUint32LE(version, transaction.version)
 	for item in trustedInputsAndInputScripts:
 		newInput = bitcoinInput()
-		newInput.prevOut = item[0][4:4+36]
+                newInput.prevOut = item[0][4:4+36] if trusted else item[0][:36]
 		newInput.script = item[1]
                 if len(item) > 2:
                 	newInput.sequence = bytearray(item[2].decode('hex'))
@@ -86,7 +86,7 @@ def write_pushed_data_size(data, buffer):
         return buffer
 
 
-def get_p2sh_input_script(redeemScript, sigHashtypeList):
+def get_p2sh_multisig_input_script(redeemScript, sigHashtypeList):
 	result = [ 0x00 ]
 	for sigHashtype in sigHashtypeList:
 		write_pushed_data_size(sigHashtype, result)
@@ -94,6 +94,14 @@ def get_p2sh_input_script(redeemScript, sigHashtypeList):
 	write_pushed_data_size(redeemScript, result)
 	result.extend(redeemScript)
 	return bytearray(result)
+
+def get_witness_keyhash_witness(signature, pubkey):
+    result = []
+    write_pushed_data_size(signature, result)
+    result.extend(signature)
+    write_pushed_data_size(pubkey, result)
+    result.extend(pubkey)
+    return bytearray(result)
 
 def get_output_script(amountScriptArray):
 	result = [ len(amountScriptArray) ]
