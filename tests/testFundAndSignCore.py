@@ -4,7 +4,10 @@ from btchip.btchipUtils import *
 from bitcoin.rpc import Proxy
 import bitcoin
 import sys
+import struct
 
+
+from pdb import set_trace
 # This script will create a funded transaction from the wallet and sign
 # This script requires you be running hdwatchonly(https://github.com/bitcoin/bitcoin/pull/9728)
 # and set the "donglePath" variable below to whichever account xpubkey you
@@ -53,7 +56,7 @@ bitcoin.SelectParams(network)
 
 try:
     if conf != "":
-        Proxy(btc_conf_file=conf)
+        bitcoin = Proxy(btc_conf_file=conf)
     else:
         bitcoin = Proxy()
 except:
@@ -96,6 +99,7 @@ rawInputs = []
 inputTxids = []
 inputVouts = []
 inputAddrs = []
+inputAmount = []
 inputPaths = []
 inputPubKey = []
 inputSeq = []
@@ -112,7 +116,7 @@ for input in decodedTxn["vin"]:
     inputAmount.append(decodedInput["vout"][input["vout"]]["value"])
     validata = bitcoin.validateaddress(inputAddrs[-1])
     if validata["isscript"] == True:
-        if validata["script"] != "multisig" or validata["script"] != "witness_v0_keyhash":
+        if validata["script"] != "multisig" and validata["script"] != "witness_v0_keyhash":
             raise Exception("Only multisig and witness_v0_keyhash p2sh are currently supported")
         subpaths = []
         if validata["script"] == "multisig" and "addresses" in validata:
@@ -123,9 +127,9 @@ for input in decodedTxn["vin"]:
                     subpaths.append(subvalid["hdkeypath"][1:])
             inputPubKey.append("")
             hash_legacy = True
-        if validata["script"] == "p2sh-witness_v0_keyhash" and hdkeypath in validata:
-            inputType[-1] = "witness_v0_keyhash"
-            subpaths.append(subvalid["hdkeypath"][1:])
+        if validata["script"] == "witness_v0_keyhash" and "hdkeypath" in validata:
+            inputType[-1] = "p2sh-witness_v0_keyhash"
+            subpaths.append(validata["hdkeypath"][1:])
             inputPubKey.append(validata["pubkey"])
             has_segwit = True
         inputPaths.append(subpaths)
@@ -148,7 +152,7 @@ spendTxn = bytearray(fundTxn["hex"].decode('hex'))
 prevoutScriptPubkey = []
 outputData = ""
 trustedInputs = []
-signatures = []
+signatures = [[]]*len(inputTxids)
 
 if has_legacy:
     # Compile trusted inputs for later non-segwit signing
@@ -164,7 +168,6 @@ if has_legacy:
     for i in range(len(inputTxids)):
         if inputType[i] == "p2sh-witness_v0_keyhash":
             # Gap in signatures where segwit sigs will go
-            signatures.append("")
             continue
         signature = []
         for inputPath in inputPaths[i]:
@@ -175,7 +178,7 @@ if has_legacy:
             outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
             # Provide the key that is signing the input
             signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
-        signatures.append(signature)
+        signatures[i] = signature
 
 
 
@@ -183,13 +186,20 @@ segwitInputs = []
 # Compile segwit-signing inputs
 if has_segwit:
     for i in range(len(inputTxids)):
-        txid = inputTxids[i]
+        txid = bytearray(inputTxids[i].decode('hex'))
+        txid.reverse()
         vout = inputVouts[i]
         amount = inputAmount[i]
-        segwitInputs.append({"value":txid+struct.pack(">I", vout)+struct.pack(">Q", int(amount*100000000)), "witness":True})
+        segwitInputs.append({"value":txid+struct.pack("<I", vout)+struct.pack("<Q", int(amount*100000000)), "witness":True})
+
+    newTx = True
+    # Up front with all inputs
+    prevoutscript = bytearray()
+    app.startUntrustedTransaction(newTx, i, segwitInputs, prevoutscript, decodedTxn["version"])
+    outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
+    newTx = False
 
     # Sign segwit-style nested keyhashes
-    newTx = True
     for i in range(len(inputTxids)):
         if inputType[i] != "p2sh-witness_v0_keyhash":
             continue
@@ -197,14 +207,13 @@ if has_segwit:
         for inputPath in inputPaths[i]:
             prevoutscript = bytearray(redeemScripts[i].decode('hex'))
             app.startUntrustedTransaction(newTx, i, segwitInputs, prevoutscript, decodedTxn["version"])
-            newTx = False
-            outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
+            #outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
             signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
         # put in place
         signatures[i] = signature
 
 
-witnessesToInsert = [0x00]*len(signatures)
+witnessesToInsert = [bytearray(0x00)]*len(signatures)
 inputScripts = []
 for i in range(len(signatures)):
     if inputType[i] == "pubkey":
@@ -215,28 +224,30 @@ for i in range(len(signatures)):
         inputScripts.append(get_p2sh_multisig_input_script(bytearray(redeemScripts[i].decode('hex')), signatures[i]))
     elif inputType[i] == "p2sh-witness_v0_keyhash":
         # Just the redeemscript, we need to insert the signature to witness
-        inputScripts.append(bytearray(redeemScripts[i].decode('hex')))
+        inputScript = bytearray()
+        write_pushed_data_size(bytearray(redeemScripts[i].decode('hex')), inputScript)
+        inputScript.extend(bytearray(redeemScripts[i].decode('hex')))
+        inputScripts.append(inputScript)
         witnessesToInsert[i] = get_witness_keyhash_witness(signatures[i][0], inputPubKey[i])
+
     else:
         raise Exception("only p2pkh, p2sh(multisig and p2wpkh) and p2pk currently supported")
 
-witness = ""
-for i in len(witnessesToInsert):
-    writeVarint(len(witnessesToInsert[i]), witness)
-    if len(witnessesToInsert[i] != 0:
-        witness.extend(witnessToInsert[i])
+witness = bytearray()
+for i in range(len(witnessesToInsert)):
+    writeVarint((2 if len(witnessesToInsert[i]) != 0 else 0), witness)#push two items to stack #len(witnessesToInsert[i]), witness)
+    if len(witnessesToInsert[i]) != 0:
+        witness.extend(witnessesToInsert[i])
 
 processed_inputs = segwitInputs if has_segwit else trustedInputs
 process_trusted = not has_segwit
     
 
 trustedInputsAndInputScripts = []
-for trustedInput, inputScript in zip(processed_inputs, inputScripts):
-    trustedInputsAndInputScripts.append([processed_inputs['value'], inputScript, inputSeq[i]])
+for processedInput, inputScript in zip(processed_inputs, inputScripts):
+    trustedInputsAndInputScripts.append([processedInput['value'], inputScript, inputSeq[i]])
 
-transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts, decodedTxn["version"], decodedTxn["locktime"], process_trusted)
-# Next, insert witness data TODO support in library
-transaction.witnessScript = witness
+transaction = format_transaction(outputData['outputData'], trustedInputsAndInputScripts, decodedTxn["version"], decodedTxn["locktime"], process_trusted, witness)
 transaction = ''.join('{:02x}'.format(x) for x in transaction)
 
 print("*** Presigned transaction ***")

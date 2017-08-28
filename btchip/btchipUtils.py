@@ -35,9 +35,11 @@ def compress_public_key(publicKey):
 	else:
 		raise BTChipException("Invalid public key format")
 
-def format_transaction(dongleOutputData, trustedInputsAndInputScripts, version=0x01, lockTime=0, trusted=True):
+def format_transaction(dongleOutputData, trustedInputsAndInputScripts, version=0x01, lockTime=0, trusted=True, witness=""):
 	transaction = bitcoinTransaction()
 	transaction.version = []
+        transaction.witnessScript = witness
+        transaction.witness = True if witness != "" else False
 	writeUint32LE(version, transaction.version)
 	for item in trustedInputsAndInputScripts:
 		newInput = bitcoinInput()
@@ -50,6 +52,8 @@ def format_transaction(dongleOutputData, trustedInputsAndInputScripts, version=0
 		transaction.inputs.append(newInput)
 	result = transaction.serialize(True)
 	result.extend(dongleOutputData)
+        if witness != "":
+            result.extend(witness)
 	writeUint32BE(lockTime, result)
 	return bytearray(result)
 
@@ -97,9 +101,9 @@ def get_p2sh_multisig_input_script(redeemScript, sigHashtypeList):
 
 def get_witness_keyhash_witness(signature, pubkey):
     result = []
-    write_pushed_data_size(signature, result)
+    writeVarint(len(signature), result)
     result.extend(signature)
-    write_pushed_data_size(pubkey, result)
+    writeVarint(len(pubkey), result)
     result.extend(pubkey)
     return bytearray(result)
 
