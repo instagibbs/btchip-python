@@ -43,12 +43,19 @@ block_target = 6
 if len(sys.argv) > 5:
     block_target = int(sys.argv[5])
 
+conf = ""
+if len(sys.argv) > 6:
+    conf = sys.argv[6]
+
 destAddr = sys.argv[1]
 amount = sys.argv[2]
 bitcoin.SelectParams(network)
 
 try:
-    bitcoin = Proxy()
+    if conf != "":
+        Proxy(btc_conf_file=conf)
+    else:
+        bitcoin = Proxy()
 except:
     print("Make sure bitcoind is running.")
     sys.exit(-1)
