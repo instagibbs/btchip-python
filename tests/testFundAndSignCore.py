@@ -6,7 +6,6 @@ import bitcoin
 import sys
 import struct
 
-
 from pdb import set_trace
 # This script will create a funded transaction from the wallet and sign
 # This script requires you be running hdwatchonly(https://github.com/bitcoin/bitcoin/pull/9728)
@@ -149,7 +148,9 @@ for input in decodedTxn["vin"]:
     seq = bytearray(seq.decode('hex'))
     seq.reverse()
     seq = ''.join('{:02x}'.format(x) for x in seq)
-    inputSeq.append(seq)
+    #inputSeq.append(seq)
+    # TODO remove when working
+    inputSeq.append('ffffffff')
 
 spendTxn = bytearray(fundTxn["hex"].decode('hex'))
 
@@ -157,7 +158,6 @@ prevoutScriptPubkey = []
 outputData = ""
 trustedInputs = []
 signatures = [[]]*len(inputTxids)
-set_trace()
 if has_legacy:
     # Compile trusted inputs for later non-segwit signing
     for i in range(len(inputTxids)):
@@ -184,7 +184,6 @@ if has_legacy:
             signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
         signatures[i] = signature
 
-
 segwitInputs = []
 # Compile segwit-signing inputs
 if has_segwit:
@@ -198,20 +197,23 @@ if has_segwit:
     newTx = True
     # Up front with all inputs
     prevoutscript = bytearray()
-    set_trace()
     for i in range(len(inputTxids)):
         app.startUntrustedTransaction(newTx, i, segwitInputs, prevoutscript, decodedTxn["version"])
         outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
         newTx = False
-
     # Sign segwit-style nested keyhashes
     for i in range(len(inputTxids)):
         if inputType[i] != "p2sh-witness_v0_keyhash":
             continue
         signature = []
         for inputPath in inputPaths[i]:
-            prevoutscript = bytearray(redeemScripts[i].decode('hex'))
-            app.startUntrustedTransaction(newTx, i, segwitInputs, prevoutscript, decodedTxn["version"])
+            # For p2wpkh, we need to convert the script into something sensible to the ledger:
+            # OP_DUP OP_HASH160 <program> OP_EQUALVERIFY OP_CHECKSIG
+            prevoutscript = redeemScripts[i][4:] #cut off version and push bytes
+            set_trace()
+            prevoutscript = bytearray(("76a914"+prevoutscript+"88ac").decode("hex"))
+            
+            app.startUntrustedTransaction(newTx, i, [segwitInputs[i]], prevoutscript, decodedTxn["version"])
             #outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
             signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
         # put in place
