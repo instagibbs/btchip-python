@@ -74,7 +74,7 @@ rawTxn = bitcoin.call("createrawtransaction", [], {destAddr:amount})
 
 # Fund the transaction
 # Inputs in this setup must be p2pkh and not coinbase transactions
-fundoptions = {"includeWatching":True, "replaceable":False}
+fundoptions = {"includeWatching":True, "replaceable":True}
 if "feerate" in smartfee:
     fundoptions["feeRate"] = str(smartfee)
 
@@ -157,7 +157,7 @@ prevoutScriptPubkey = []
 outputData = ""
 trustedInputs = []
 signatures = [[]]*len(inputTxids)
-
+set_trace()
 if has_legacy:
     # Compile trusted inputs for later non-segwit signing
     for i in range(len(inputTxids)):
@@ -239,10 +239,11 @@ for i in range(len(signatures)):
         raise Exception("only p2pkh, p2sh(multisig and p2wpkh) and p2pk currently supported")
 
 witness = bytearray()
-for i in range(len(witnessesToInsert)):
-    writeVarint((2 if len(witnessesToInsert[i]) != 0 else 0), witness)#push two items to stack #len(witnessesToInsert[i]), witness)
-    if len(witnessesToInsert[i]) != 0:
-        witness.extend(witnessesToInsert[i])
+if has_segwit:
+    for i in range(len(witnessesToInsert)):
+        writeVarint((2 if len(witnessesToInsert[i]) != 0 else 0), witness)#push two items to stack #len(witnessesToInsert[i]), witness)
+        if len(witnessesToInsert[i]) != 0:
+            witness.extend(witnessesToInsert[i])
 
 processed_inputs = segwitInputs if has_segwit else trustedInputs
 process_trusted = not has_segwit
