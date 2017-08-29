@@ -148,9 +148,7 @@ for input in decodedTxn["vin"]:
     seq = bytearray(seq.decode('hex'))
     seq.reverse()
     seq = ''.join('{:02x}'.format(x) for x in seq)
-    #inputSeq.append(seq)
-    # TODO remove when working
-    inputSeq.append('ffffffff')
+    inputSeq.append(seq)
 
 spendTxn = bytearray(fundTxn["hex"].decode('hex'))
 
@@ -199,8 +197,9 @@ if has_segwit:
     prevoutscript = bytearray()
     for i in range(len(inputTxids)):
         app.startUntrustedTransaction(newTx, i, segwitInputs, prevoutscript, decodedTxn["version"])
-        outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
         newTx = False
+
+    outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Sign segwit-style nested keyhashes
     for i in range(len(inputTxids)):
         if inputType[i] != "p2sh-witness_v0_keyhash":
@@ -210,7 +209,6 @@ if has_segwit:
             # For p2wpkh, we need to convert the script into something sensible to the ledger:
             # OP_DUP OP_HASH160 <program> OP_EQUALVERIFY OP_CHECKSIG
             prevoutscript = redeemScripts[i][4:] #cut off version and push bytes
-            set_trace()
             prevoutscript = bytearray(("76a914"+prevoutscript+"88ac").decode("hex"))
             
             app.startUntrustedTransaction(newTx, i, [segwitInputs[i]], prevoutscript, decodedTxn["version"])
