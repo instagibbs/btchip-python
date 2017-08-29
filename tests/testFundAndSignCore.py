@@ -74,7 +74,7 @@ rawTxn = bitcoin.call("createrawtransaction", [], {destAddr:amount})
 
 # Fund the transaction
 # Inputs in this setup must be p2pkh and not coinbase transactions
-fundoptions = {"includeWatching":True, "replaceable":True}
+fundoptions = {"includeWatching":True, "replaceable":False}
 if "feerate" in smartfee:
     fundoptions["feeRate"] = str(smartfee)
 
@@ -145,6 +145,10 @@ for input in decodedTxn["vin"]:
 
     seq = format(input["sequence"], 'x')
     seq = seq.zfill(len(seq)+len(seq)%2)
+    # FIXME Somehow wasn't needed for legacy?
+    seq = bytearray(seq.decode('hex'))
+    seq.reverse()
+    seq = ''.join('{:02x}'.format(x) for x in seq)
     inputSeq.append(seq)
 
 spendTxn = bytearray(fundTxn["hex"].decode('hex'))
@@ -181,7 +185,6 @@ if has_legacy:
         signatures[i] = signature
 
 
-
 segwitInputs = []
 # Compile segwit-signing inputs
 if has_segwit:
@@ -190,14 +193,16 @@ if has_segwit:
         txid.reverse()
         vout = inputVouts[i]
         amount = inputAmount[i]
-        segwitInputs.append({"value":txid+struct.pack("<I", vout)+struct.pack("<Q", int(amount*100000000)), "witness":True})
+        segwitInputs.append({"value":txid+struct.pack("<I", vout)+struct.pack("<Q", int(amount*100000000)), "witness":True, "sequence":inputSeq[i]})
 
     newTx = True
     # Up front with all inputs
     prevoutscript = bytearray()
-    app.startUntrustedTransaction(newTx, i, segwitInputs, prevoutscript, decodedTxn["version"])
-    outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
-    newTx = False
+    set_trace()
+    for i in range(len(inputTxids)):
+        app.startUntrustedTransaction(newTx, i, segwitInputs, prevoutscript, decodedTxn["version"])
+        outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
+        newTx = False
 
     # Sign segwit-style nested keyhashes
     for i in range(len(inputTxids)):
