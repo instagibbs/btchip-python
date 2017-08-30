@@ -169,9 +169,8 @@ if has_legacy:
     newTx = True
     # Now we legacy sign the transaction, input by input
     for i in range(len(inputTxids)):
-        #if inputType[i] == "p2sh-witness_v0_keyhash":
-        #    # Gap in signatures where segwit sigs will go
-        #    continue
+        if inputType[i] == "p2sh-witness_v0_keyhash":
+            continue
         signature = []
         for inputPath in inputPaths[i]:
             # this call assumes transaction version 1
@@ -203,8 +202,8 @@ if has_segwit:
     outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Sign segwit-style nested keyhashes
     for i in range(len(inputTxids)):
-        #if inputType[i] != "p2sh-witness_v0_keyhash":
-        #    continue
+        if inputType[i] != "p2sh-witness_v0_keyhash":
+            continue
         signature = []
         for inputPath in inputPaths[i]:
             # For p2wpkh, we need to convert the script into something sensible to the ledger:
@@ -212,12 +211,9 @@ if has_segwit:
             prevoutscript = redeemScripts[i][4:] #cut off version and push bytes
             prevoutscript = bytearray(("76a914"+prevoutscript+"88ac").decode("hex"))
             
-            app.startUntrustedTransaction(newTx, i, [segwitInputs[i]], prevoutscript, decodedTxn["version"])
-            #outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
+            app.startUntrustedTransaction(newTx, 0, [segwitInputs[i]], prevoutscript, decodedTxn["version"])
             signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
-        # put in place
-        if inputType[i] == "p2sh-witness_v0_keyhash":
-            signatures[i] = signature
+        signatures[i] = signature
 
 
 witnessesToInsert = [bytearray(0x00)]*len(signatures)
@@ -270,4 +266,3 @@ if response == "Y":
 else:
     print("Transaction not sent.")
 
-set_trace()
