@@ -5,22 +5,21 @@ from bitcoin.rpc import Proxy
 import bitcoin
 import sys
 import struct
-
 from pdb import set_trace
+
 # This script will create a funded transaction from the wallet and sign
 # This script requires you be running hdwatchonly(https://github.com/bitcoin/bitcoin/pull/9728)
-# and set the "donglePath" variable below to whichever account xpubkey you
+# as well as a patch to understand p2sh-nested p2wpkh outputs.
+# You must also set the "donglePath" variable below to whichever account xpubkey you
 # imported into your Core wallet.
 #
-# Also make sure that any funds in your wallet are p2pkh;
-# This means that any regtest `generate` should be replaced
-# by `generatetoaddress` to avoid funding the txn with p2pk outputs.
+# Currently no support for nested-p2sh p2wsh or raw segwit outputs
 #
 # Other dependencies:
 # python-bitcoinlib
 # btchip-python
 # and of course a connected Ledger Nano S
-# running the bitcoin app
+# running the bitcoin app 1.1.8 or later
 
 # Resources:
 # https://ledgerhq.github.io/btchip-doc/bitcoin-technical-beta.html most up to date spec
@@ -81,7 +80,6 @@ fundTxn = bitcoin.call("fundrawtransaction", rawTxn, fundoptions)
 # Grab input transactions
 decodedTxn = bitcoin.call("decoderawtransaction", fundTxn["hex"])
 
-print(fundTxn["hex"])
 # Random changePath in case there is no change
 changePath = "0'/0'/0'/0'"
 if fundTxn["changepos"] == -1:
@@ -145,7 +143,6 @@ for input in decodedTxn["vin"]:
 
     seq = format(input["sequence"], 'x')
     seq = seq.zfill(len(seq)+len(seq)%2)
-    # FIXME Somehow wasn't needed for legacy?
     seq = bytearray(seq.decode('hex'))
     seq.reverse()
     seq = ''.join('{:02x}'.format(x) for x in seq)
@@ -157,14 +154,17 @@ prevoutScriptPubkey = []
 outputData = ""
 trustedInputs = []
 signatures = [[]]*len(inputTxids)
+
+# To sign mixed segwit/non-segwit inputs, you just sign in both modes, once each
+
+# Sign for legacy inputs
 if has_legacy:
-    # Compile trusted inputs for later non-segwit signing
+    # Compile trusted inputs for non-segwit signing
     for i in range(len(inputTxids)):
         inputTransaction = bitcoinTransaction(bytearray(rawInputs[i].decode('hex')))
         trustedInputs.append(app.getTrustedInput(inputTransaction, inputVouts[i]))
         trustedInputs[-1]["sequence"] = inputSeq[i]
         prevoutScriptPubkey.append(inputTransaction.outputs[inputVouts[i]].script)
-
 
     newTx = True
     # Now we legacy sign the transaction, input by input
@@ -173,7 +173,6 @@ if has_legacy:
             continue
         signature = []
         for inputPath in inputPaths[i]:
-            # this call assumes transaction version 1
             prevoutscript = bytearray(redeemScripts[i].decode('hex')) if inputType[i] == "p2sh-multisig" else prevoutScriptPubkey[i]
             app.startUntrustedTransaction(newTx, i, trustedInputs, prevoutscript, decodedTxn["version"])
             newTx = False
@@ -183,8 +182,9 @@ if has_legacy:
         signatures[i] = signature
 
 segwitInputs = []
-# Compile segwit-signing inputs
+# Sign segwit inputs
 if has_segwit:
+    # Build segwit inputs
     for i in range(len(inputTxids)):
         txid = bytearray(inputTxids[i].decode('hex'))
         txid.reverse()
@@ -193,12 +193,13 @@ if has_segwit:
         segwitInputs.append({"value":txid+struct.pack("<I", vout)+struct.pack("<Q", int(amount*100000000)), "witness":True, "sequence":inputSeq[i]})
 
     newTx = True
-    # Up front with all inputs
+    # Process them front with all inputs
     prevoutscript = bytearray()
     for i in range(len(inputTxids)):
         app.startUntrustedTransaction(newTx, i, segwitInputs, prevoutscript, decodedTxn["version"])
         newTx = False
 
+    # Then finalize, and process each input as a single-input transaction
     outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Sign segwit-style nested keyhashes
     for i in range(len(inputTxids)):
@@ -239,7 +240,7 @@ for i in range(len(signatures)):
 witness = bytearray()
 if has_segwit:
     for i in range(len(witnessesToInsert)):
-        writeVarint((2 if len(witnessesToInsert[i]) != 0 else 0), witness)#push two items to stack #len(witnessesToInsert[i]), witness)
+        writeVarint((2 if len(witnessesToInsert[i]) != 0 else 0), witness)#push two items to stack
         if len(witnessesToInsert[i]) != 0:
             witness.extend(witnessesToInsert[i])
 
