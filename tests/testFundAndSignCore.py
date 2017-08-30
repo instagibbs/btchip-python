@@ -262,7 +262,11 @@ print("*** Feerate ***")
 print(str(fundTxn["fee"]*100000000/(len(transaction)/2)).split(".")[0] + " satoshis/byte")
 response = raw_input("Send transaction? Y/n\n")
 if response == "Y":
-    print(bitcoin.call("sendrawtransaction", transaction))
+    try:
+        print(bitcoin.call("sendrawtransaction", transaction))
+    except:
+        # in case of error I want to take a look
+        set_trace()
 else:
     print("Transaction not sent.")
 
