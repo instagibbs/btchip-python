@@ -81,6 +81,7 @@ fundTxn = bitcoin.call("fundrawtransaction", rawTxn, fundoptions)
 # Grab input transactions
 decodedTxn = bitcoin.call("decoderawtransaction", fundTxn["hex"])
 
+print(fundTxn["hex"])
 # Random changePath in case there is no change
 changePath = "0'/0'/0'/0'"
 if fundTxn["changepos"] == -1:
@@ -125,7 +126,7 @@ for input in decodedTxn["vin"]:
                 if "hdkeypath" in subvalid:
                     subpaths.append(subvalid["hdkeypath"][1:])
             inputPubKey.append("")
-            hash_legacy = True
+            has_legacy = True
         if validata["script"] == "witness_v0_keyhash" and "hdkeypath" in validata:
             inputType[-1] = "p2sh-witness_v0_keyhash"
             subpaths.append(validata["hdkeypath"][1:])
@@ -168,9 +169,9 @@ if has_legacy:
     newTx = True
     # Now we legacy sign the transaction, input by input
     for i in range(len(inputTxids)):
-        if inputType[i] == "p2sh-witness_v0_keyhash":
-            # Gap in signatures where segwit sigs will go
-            continue
+        #if inputType[i] == "p2sh-witness_v0_keyhash":
+        #    # Gap in signatures where segwit sigs will go
+        #    continue
         signature = []
         for inputPath in inputPaths[i]:
             # this call assumes transaction version 1
@@ -202,8 +203,8 @@ if has_segwit:
     outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
     # Sign segwit-style nested keyhashes
     for i in range(len(inputTxids)):
-        if inputType[i] != "p2sh-witness_v0_keyhash":
-            continue
+        #if inputType[i] != "p2sh-witness_v0_keyhash":
+        #    continue
         signature = []
         for inputPath in inputPaths[i]:
             # For p2wpkh, we need to convert the script into something sensible to the ledger:
@@ -215,7 +216,8 @@ if has_segwit:
             #outputData = app.finalizeInput("DUMMY", -1, -1, donglePath+changePath, spendTxn)
             signature.append(app.untrustedHashSign(donglePath+inputPath, "", decodedTxn["locktime"], 0x01))
         # put in place
-        signatures[i] = signature
+        if inputType[i] == "p2sh-witness_v0_keyhash":
+            signatures[i] = signature
 
 
 witnessesToInsert = [bytearray(0x00)]*len(signatures)
@@ -267,3 +269,5 @@ if response == "Y":
     print(bitcoin.call("sendrawtransaction", transaction))
 else:
     print("Transaction not sent.")
+
+set_trace()
